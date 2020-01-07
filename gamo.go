@@ -86,7 +86,7 @@ func main() {
 		requestID := nextRequestID()
 		requestLog := log.WithFields(logrus.Fields{"request-id": requestID})
 
-		w.Header().Add("X-Request-Id", requestID)
+		w.Header().Set("X-Request-Id", requestID)
 
 		segments := strings.Split(r.URL.Path, "/")
 		dimensions := MAX_DIMENSIONS
@@ -211,17 +211,16 @@ func main() {
 				return
 			}
 
-			k, err := w.Write(outputImage)
+			w.Header().Set("Content-Length", strconv.FormatInt(int64(len(outputImage)), 10))
+			w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+			w.Header().Set("Cache-Control", "public, max-age=31536000")
+
+			_, err = w.Write(outputImage)
 
 			if err != nil {
 				requestLog.Error(fmt.Sprintf("Error writing response: %s", err))
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				return
 			}
-
-			w.Header().Add("Content-Length", strconv.FormatInt(int64(k), 10))
-			w.Header().Add("Content-Type", resp.Header.Get("Content-Type"))
-			w.Header().Add("Cache-Control", "public, max-age=31536000")
 		} else {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		}
