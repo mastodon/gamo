@@ -15,6 +15,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 const (
@@ -41,6 +42,14 @@ func nextRequestID() string {
 }
 
 var log = logrus.New()
+
+var opsPool = sync.Pool{
+	New: func() interface{} {
+		ops := lilliput.NewImageOps(MAX_DIMENSIONS)
+		defer ops.Close()
+		return ops
+	},
+}
 
 func main() {
 	log.Out = os.Stdout
@@ -72,9 +81,6 @@ func main() {
 	} else {
 		log.Info("Without resizing")
 	}
-
-	ops := lilliput.NewImageOps(MAX_DIMENSIONS)
-	defer ops.Close()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		requestID := nextRequestID()
@@ -122,7 +128,7 @@ func main() {
 		expectedMAC := mac.Sum(nil)
 
 		if hmac.Equal(messageMAC, expectedMAC) {
-			requestLog = requestLog.WithFields(logrus.Fields{"url": imageURL})
+			requestLog = requestLog.WithFields(logrus.Fields{"url": string(imageURL)})
 			resp, err := http.Get(string(imageURL))
 
 			if err != nil {
@@ -148,8 +154,6 @@ func main() {
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 				return
 			}
-
-			var outputImage []byte
 
 			decoder, err := lilliput.NewDecoder(originalImage)
 
@@ -185,7 +189,7 @@ func main() {
 				outputHeight = header.Height()
 			}
 
-			outputImage = make([]byte, 50*1024*1024)
+			outputImage := make([]byte, 50*1024*1024)
 
 			resizeOptions := &lilliput.ImageOptions{
 				FileType:             outputFormat,
@@ -195,6 +199,9 @@ func main() {
 				NormalizeOrientation: true,
 				EncodeOptions:        EncodeOptions[outputFormat],
 			}
+
+			ops := opsPool.Get().(*lilliput.ImageOps)
+			defer opsPool.Put(ops)
 
 			outputImage, err = ops.Transform(decoder, resizeOptions, outputImage)
 
