@@ -64,7 +64,7 @@ func main() {
 			parsedDimensions, err := strconv.ParseInt(x, 10, 0)
 
 			if err != nil {
-				logrus.Fatal("Unrecognized value in dimensions: ", x)
+				log.Fatal("Unrecognized value in dimensions: ", x)
 			}
 
 			dimensionsMap[parsedDimensions] = true
@@ -72,6 +72,9 @@ func main() {
 	} else {
 		log.Info("Without resizing")
 	}
+
+	ops := lilliput.NewImageOps(MAX_DIMENSIONS)
+	defer ops.Close()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		requestID := nextRequestID()
@@ -181,9 +184,6 @@ func main() {
 				outputWidth = header.Width()
 				outputHeight = header.Height()
 			}
-
-			ops := lilliput.NewImageOps(MAX_DIMENSIONS)
-			defer ops.Close()
 
 			outputImage = make([]byte, 50*1024*1024)
 
