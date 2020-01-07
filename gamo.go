@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -214,12 +215,15 @@ func main() {
 			w.Header().Set("Content-Length", strconv.FormatInt(int64(len(outputImage)), 10))
 			w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
 			w.Header().Set("Cache-Control", "public, max-age=31536000")
+			w.Header().Set("Expires", time.Now().Add(31536000*time.Second).In(time.UTC).Format("Mon, 02 Jan 2006 15:04:05 GMT"))
 
-			_, err = w.Write(outputImage)
+			if r.Method != "HEAD" {
+				_, err = w.Write(outputImage)
 
-			if err != nil {
-				requestLog.Error(fmt.Sprintf("Error writing response: %s", err))
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				if err != nil {
+					requestLog.Error(fmt.Sprintf("Error writing response: %s", err))
+					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				}
 			}
 		} else {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
