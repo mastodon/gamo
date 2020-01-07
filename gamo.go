@@ -216,6 +216,7 @@ func main() {
 			w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
 			w.Header().Set("Cache-Control", "public, max-age=31536000")
 			w.Header().Set("Expires", time.Now().Add(31536000*time.Second).In(time.UTC).Format("Mon, 02 Jan 2006 15:04:05 GMT"))
+			w.Header().Set("Vary", "Accept-Encoding")
 
 			if r.Method != "HEAD" {
 				_, err = w.Write(outputImage)
