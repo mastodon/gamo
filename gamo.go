@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"github.com/Jeffail/tunny"
 	"github.com/discordapp/lilliput"
 	"github.com/satori/go.uuid"
 	"github.com/sirupsen/logrus"
@@ -15,9 +16,52 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
+
+type imageOpsWorker struct {
+	ops *lilliput.ImageOps
+}
+
+type imageOpsPayload struct {
+	decoder lilliput.Decoder
+	options *lilliput.ImageOptions
+}
+
+type imageOpsResult struct {
+	result []byte
+	err    error
+}
+
+func (w *imageOpsWorker) Process(payload interface{}) interface{} {
+	input := payload.(*imageOpsPayload)
+	output := make([]byte, 50*1024*1024)
+
+	output, err := w.ops.Transform(input.decoder, input.options, output)
+
+	return &imageOpsResult{
+		result: output,
+		err:    err,
+	}
+}
+
+func (w *imageOpsWorker) BlockUntilReady() {
+	//
+}
+
+func (w *imageOpsWorker) Interrupt() {
+	//
+}
+
+func (w *imageOpsWorker) Terminate() {
+	w.ops.Close()
+}
+
+func newImageOpsWorker() *imageOpsWorker {
+	return &imageOpsWorker{
+		ops: lilliput.NewImageOps(MAX_DIMENSIONS),
+	}
+}
 
 const (
 	DEFAULT_BIND       = "127.0.0.1:8081"
@@ -43,14 +87,6 @@ func nextRequestID() string {
 }
 
 var log = logrus.New()
-
-var opsPool = sync.Pool{
-	New: func() interface{} {
-		ops := lilliput.NewImageOps(MAX_DIMENSIONS)
-		defer ops.Close()
-		return ops
-	},
-}
 
 func main() {
 	log.Out = os.Stdout
@@ -82,6 +118,10 @@ func main() {
 	} else {
 		log.Info("Without resizing")
 	}
+
+	pool := tunny.New(2, func() tunny.Worker {
+		return newImageOpsWorker()
+	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		requestID := nextRequestID()
@@ -190,8 +230,6 @@ func main() {
 				outputHeight = header.Height()
 			}
 
-			outputImage := make([]byte, 50*1024*1024)
-
 			resizeOptions := &lilliput.ImageOptions{
 				FileType:             outputFormat,
 				Width:                outputWidth,
@@ -201,16 +239,18 @@ func main() {
 				EncodeOptions:        EncodeOptions[outputFormat],
 			}
 
-			ops := opsPool.Get().(*lilliput.ImageOps)
-			defer opsPool.Put(ops)
+			result := pool.Process(&imageOpsPayload{
+				decoder: decoder,
+				options: resizeOptions,
+			}).(*imageOpsResult)
 
-			outputImage, err = ops.Transform(decoder, resizeOptions, outputImage)
-
-			if err != nil {
+			if result.err != nil {
 				requestLog.Error(fmt.Sprintf("Error transforming image: %s", err))
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 				return
 			}
+
+			outputImage := result.result
 
 			w.Header().Set("Content-Length", strconv.FormatInt(int64(len(outputImage)), 10))
 			w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
