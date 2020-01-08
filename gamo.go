@@ -19,6 +19,14 @@ import (
 	"time"
 )
 
+const (
+	DEFAULT_BIND       = "127.0.0.1:8081"
+	DEFAULT_KEY        = "0x24FEEDFACEDEADBEEFCAFE"
+	MAX_CONTENT_LENGTH = 5242880
+	MAX_DIMENSIONS     = 8912
+	OUTPUT_BUFFER_SIZE = 10 * 1024 * 1024
+)
+
 type imageOpsWorker struct {
 	ops *lilliput.ImageOps
 }
@@ -34,8 +42,10 @@ type imageOpsResult struct {
 }
 
 func (w *imageOpsWorker) Process(payload interface{}) interface{} {
+	log.Debug("Allocating memory for transformation")
+
 	input := payload.(*imageOpsPayload)
-	output := make([]byte, 50*1024*1024)
+	output := make([]byte, OUTPUT_BUFFER_SIZE)
 
 	output, err := w.ops.Transform(input.decoder, input.options, output)
 
@@ -54,21 +64,17 @@ func (w *imageOpsWorker) Interrupt() {
 }
 
 func (w *imageOpsWorker) Terminate() {
+	log.Debug("Shutting down worker")
 	w.ops.Close()
 }
 
 func newImageOpsWorker() *imageOpsWorker {
+	log.Debug("Initializing worker")
+
 	return &imageOpsWorker{
 		ops: lilliput.NewImageOps(MAX_DIMENSIONS),
 	}
 }
-
-const (
-	DEFAULT_BIND       = "127.0.0.1:8081"
-	DEFAULT_KEY        = "0x24FEEDFACEDEADBEEFCAFE"
-	MAX_CONTENT_LENGTH = 5242880
-	MAX_DIMENSIONS     = 8912
-)
 
 var (
 	configListenAddr string
@@ -90,6 +96,7 @@ var log = logrus.New()
 
 func main() {
 	log.Out = os.Stdout
+	log.Level = logrus.DebugLevel
 
 	flag.StringVar(&configListenAddr, "bind", DEFAULT_BIND, "Bind address")
 	flag.StringVar(&configSharedKey, "key", DEFAULT_KEY, "Shared HMAC secret")
@@ -197,6 +204,7 @@ func main() {
 			}
 
 			decoder, err := lilliput.NewDecoder(originalImage)
+			originalImage = nil
 
 			if err != nil {
 				requestLog.Error(fmt.Sprintf("Error decoding image: %s", err))
