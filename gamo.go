@@ -265,13 +265,13 @@ func main() {
 			w.Header().Set("Cache-Control", "public, max-age=31536000")
 			w.Header().Set("Expires", time.Now().Add(31536000*time.Second).In(time.UTC).Format("Mon, 02 Jan 2006 15:04:05 GMT"))
 			w.Header().Set("Vary", "Accept-Encoding")
+			w.Header().Set("Etag", fmt.Sprintf("%d-%x", len(outputImage), sha1.Sum(outputImage)))
 
 			if r.Method != "HEAD" {
 				_, err = w.Write(outputImage)
 
 				if err != nil {
 					requestLog.Error(fmt.Sprintf("Error writing response: %s", err))
-					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 				}
 			}
 		} else {
