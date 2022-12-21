@@ -6,17 +6,18 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"github.com/Jeffail/tunny"
-	"github.com/discordapp/lilliput"
-	"github.com/satori/go.uuid"
-	"github.com/sirupsen/logrus"
-	"io/ioutil"
+	"io"
 	"math"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Jeffail/tunny"
+	"github.com/discord/lilliput"
+	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -83,13 +84,13 @@ var (
 )
 
 var EncodeOptions = map[string]map[int]int{
-	".jpeg": map[int]int{lilliput.JpegQuality: 85},
-	".png":  map[int]int{lilliput.PngCompression: 7},
-	".webp": map[int]int{lilliput.WebpQuality: 85},
+	".jpeg": {lilliput.JpegQuality: 85},
+	".png":  {lilliput.PngCompression: 7},
+	".webp": {lilliput.WebpQuality: 85},
 }
 
 func nextRequestID() string {
-	return fmt.Sprintf("%s", uuid.Must(uuid.NewV4()))
+	return uuid.New().String()
 }
 
 var log = logrus.New()
@@ -195,7 +196,7 @@ func main() {
 				return
 			}
 
-			originalImage, err := ioutil.ReadAll(resp.Body)
+			originalImage, err := io.ReadAll(resp.Body)
 
 			if err != nil {
 				requestLog.Error(fmt.Sprintf("Error reading response body: %s", err))
